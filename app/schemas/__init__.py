@@ -3,9 +3,6 @@
 # 청킹 관련
 from app.schemas.chunking import (
     DocumentSchema,
-    ChunkingRequest, 
-    ChunkSchema,
-    ChunkingResponse,
     AdvancedChunkingRequest,
     AdvancedChunkingResponse
 )
@@ -21,14 +18,12 @@ from app.schemas.embedding import (
 
 # 하위 호환성을 위한 별칭 (기존 코드가 깨지지 않도록)
 FlexibleDocumentSchema = DocumentSchema  # 기존 이름 유지
-ChunkOnlyResponse = ChunkingResponse      # 기존 이름 유지
 
 __all__ = [
     # 청킹
     "DocumentSchema",
-    "ChunkingRequest",
-    "ChunkSchema", 
-    "ChunkingResponse",
+    "AdvancedChunkingRequest",
+    "AdvancedChunkingResponse",
     
     # 임베딩
     "EmbeddingChunkSchema",
@@ -39,5 +34,4 @@ __all__ = [
     
     # 하위 호환성
     "FlexibleDocumentSchema",
-    "ChunkOnlyResponse",
 ]

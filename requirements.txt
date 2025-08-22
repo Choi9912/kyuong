@@ -8,5 +8,6 @@ httpx>=0.24
 pytest>=7.4
 sentence-transformers>=2.2.2
 openai>=1.40.0
+langchain>=0.1.0
 
 

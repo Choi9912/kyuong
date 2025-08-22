@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from app.clients.storage_client import StorageClient
 from app.config.settings import settings
 from app.schemas import BatchEmbeddingRequest, BatchEmbeddingResponse, EmbeddingChunkSchema, QueryEmbeddingRequest, QueryEmbeddingResponse
-from app.services.chunker import TextChunker
+# TextChunker 제거됨
 from app.services.embedder import Embedder
 from app.utils.logger import get_logger, log_admin_event
 from app.utils.embedding_utils import (
