@@ -204,7 +204,7 @@ outputs/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-
+news_test_0_0.json
 # Marimo
 marimo/_static/
 marimo/_lsp/
