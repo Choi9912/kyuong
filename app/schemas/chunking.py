@@ -1,25 +1,11 @@
 """청킹 관련 스키마"""
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from pydantic import BaseModel, Field
 
 
-class DocumentSchema(BaseModel):
-    """청킹할 문서 스키마"""
-    model_config = {"extra": "allow"}  # 추가 필드 허용 (RDBMS 유연성)
-    
-    # 모든 필드를 동적으로 처리 (id_key, title_key, text_key 등으로 지정)
-
-
 class AdvancedChunkingRequest(BaseModel):
-    """고급 청킹 요청 (embed_export.py 기능)"""
-    documents: List[DocumentSchema]
+    """고급 청킹 요청 (파일 기반)"""
     mode: str = Field(default="sentence", description="청킹 모드: sentence, library, window")
-    
-    # 공통 옵션
-    id_key: str = Field(default="doc_id", description="문서 ID 필드명")
-    title_key: str = Field(default="title", description="제목 필드명")  
-    text_key: str = Field(default="text", description="본문 필드명")
-    link_key: str = Field(default="link", description="링크 필드명")
     normalize_whitespace: bool = Field(default=True, description="공백 정규화 여부")
     
     # sentence 모드 옵션

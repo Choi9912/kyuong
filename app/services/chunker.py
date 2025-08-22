@@ -37,12 +37,12 @@ class AdvancedChunker:
     def build_sentence_chunks(
         self,
         doc_id: str,
-        title: str,
         text: str,
+        text_field: str = "text",
         max_sentences: int = 3,
         overlap_sentences: int = 1,
         row_index: int = 0,
-        link: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         normalize_whitespace: bool = True,
     ) -> List[Dict[str, Any]]:
         """문장 기반 청킹"""
@@ -66,19 +66,20 @@ class AdvancedChunker:
             if normalize_whitespace:
                 chunk_text = self._collapse_whitespace(chunk_text)
 
+            # 원본 문서의 모든 필드를 메타데이터로 보존 + 청킹 필드를 청크된 텍스트로 대체
+            chunk_metadata = dict(metadata) if metadata else {}
+            # 선택한 텍스트 필드가 있다면 청크된 텍스트로 대체 (임베딩용)
+            if text_field in chunk_metadata:
+                chunk_metadata[text_field] = chunk_text
+            
             rec = {
-                "news_id": doc_id,
+                "id": doc_id,
                 "chunk_content": chunk_text,
                 "chunk_id": f"{doc_id}-{i}",
-                "metadata": {
-                    "news_id": doc_id,
-                    "title": title,
-                    "chunk_content": chunk_text,
-                    "link": link,
-                },
+                "metadata": chunk_metadata,
                 "row_index": row_index,
                 "chunk_index": i,
-                "chunk_count": len(range(0, len(sents), step)),  # 총 청크 수 계산
+                "chunk_count": len(range(0, len(sents), step)),
                 "chunk_method": "sentence",
             }
             out.append(rec)
@@ -92,12 +93,12 @@ class AdvancedChunker:
     def build_library_chunks(
         self,
         doc_id: str,
-        title: str,
         text: str,
+        text_field: str = "text",
         max_tokens: int = 500,
         overlap_tokens: int = 50,
         row_index: int = 0,
-        link: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         normalize_whitespace: bool = True,
     ) -> List[Dict[str, Any]]:
         """LangChain RecursiveCharacterTextSplitter 기반 청킹"""
@@ -120,16 +121,17 @@ class AdvancedChunker:
             if normalize_whitespace:
                 chunk_text = self._collapse_whitespace(chunk_text)
             
+            # 원본 문서의 모든 필드를 메타데이터로 보존 + 청킹 필드를 청크된 텍스트로 대체
+            chunk_metadata = dict(metadata) if metadata else {}
+            # 선택한 텍스트 필드가 있다면 청크된 텍스트로 대체 (임베딩용)
+            if text_field in chunk_metadata:
+                chunk_metadata[text_field] = chunk_text
+            
             rec = {
-                "news_id": doc_id,
+                "id": doc_id,
                 "chunk_content": chunk_text,
                 "chunk_id": f"{doc_id}-{i}",
-                "metadata": {
-                    "news_id": doc_id,
-                    "title": title,
-                    "chunk_content": chunk_text,
-                    "link": link,
-                },
+                "metadata": chunk_metadata,
                 "row_index": row_index,
                 "chunk_index": i,
                 "chunk_count": total,
@@ -142,12 +144,12 @@ class AdvancedChunker:
     def build_window_chunks(
         self,
         doc_id: str,
-        title: str,
         text: str,
+        text_field: str = "text",
         max_chars: int = 1200,
         overlap_chars: int = 200,
         row_index: int = 0,
-        link: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """정확한 문자 길이 기반 윈도우 청킹"""
         s = text or ""
@@ -162,16 +164,17 @@ class AdvancedChunker:
         out = []
         total = len(pieces)
         for i, chunk_text in enumerate(pieces, start=1):
+            # 원본 문서의 모든 필드를 메타데이터로 보존 + 청킹 필드를 청크된 텍스트로 대체
+            chunk_metadata = dict(metadata) if metadata else {}
+            # 선택한 텍스트 필드가 있다면 청크된 텍스트로 대체 (임베딩용)
+            if text_field in chunk_metadata:
+                chunk_metadata[text_field] = chunk_text
+            
             rec = {
-                "news_id": doc_id,
+                "id": doc_id,
                 "chunk_content": chunk_text,
                 "chunk_id": f"{doc_id}-{i}",
-                "metadata": {
-                    "news_id": doc_id,
-                    "title": title,
-                    "chunk_content": chunk_text,
-                    "link": link,
-                },
+                "metadata": chunk_metadata,
                 "row_index": row_index,
                 "chunk_index": i,
                 "chunk_count": total,
