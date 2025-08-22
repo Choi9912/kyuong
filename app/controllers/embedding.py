@@ -1,4 +1,5 @@
 from typing import List, Optional
+import time
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
@@ -30,6 +31,7 @@ def embedding(
     embeddings_format: str = Query(None, description="임베딩 저장 포맷: json|npy (기본 설정 따름)"),
     output_name: Optional[str] = Query(None, description="출력 파일 식별자 (기본값: chunks_file과 동일)"),
     content_field: str = Query("chunk_content", description="임베딩할 텍스트 필드명 (기본값: chunk_content)"),
+    batch_size: int = Query(100, description="배치 크기 (기본값: 100)"),
 ) -> BatchEmbeddingResponse:
     # 청크 파일 읽기
     storage_client = StorageClient(base_dir=settings.output_dir)
@@ -88,8 +90,36 @@ def embedding(
 
     embedder = Embedder(model_name=settings.embedding_model, require=settings.require_embedding_model)
 
-    # 임베딩 생성
-    vectors = embedder.embed_texts([c.content for c in all_chunks])
+    # 임베딩 생성 (배치 처리)
+    start_time = time.time()
+    total_chunks = len(all_chunks)
+    logger.info(f"임베딩 시작: {total_chunks}개 청크를 배치 크기 {batch_size}로 처리 중...")
+    
+    all_vectors = []
+    texts_to_embed = [c.content for c in all_chunks]
+    
+    # 배치 단위로 처리
+    for i in range(0, len(texts_to_embed), batch_size):
+        batch_texts = texts_to_embed[i:i+batch_size]
+        batch_num = i // batch_size + 1
+        total_batches = (len(texts_to_embed) + batch_size - 1) // batch_size
+        
+        logger.info(f"배치 {batch_num}/{total_batches} 처리 중... ({len(batch_texts)}개 청크)")
+        
+        batch_vectors = embedder.embed_texts(batch_texts)
+        all_vectors.extend(batch_vectors)
+        
+        # 진행률 출력
+        progress = (i + len(batch_texts)) / len(texts_to_embed) * 100
+        logger.info(f"진행률: {progress:.1f}% ({i + len(batch_texts)}/{len(texts_to_embed)})")
+    
+    vectors = all_vectors
+    
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    
+    logger.info(f"임베딩 완료: {total_chunks}개 청크, 소요시간: {elapsed_time:.2f}초")
+    logger.info(f"처리 속도: {total_chunks/elapsed_time:.2f} 청크/초")
 
     # 백그라운드 처리: 임베딩 저장, 어드민 로그
     # storage_client는 이미 위에서 초기화됨

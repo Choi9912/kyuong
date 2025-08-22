@@ -65,7 +65,22 @@ class OnnxEmbeddingBackend():
         from transformers import AutoTokenizer  # type: ignore
 
         onnx_path = _resolve_onnx_path(model_path)
-        self._session = ort.InferenceSession(str(onnx_path), providers=ort.get_available_providers())
+        
+        # ONNX 런타임 최적화 설정
+        sess_options = ort.SessionOptions()
+        sess_options.intra_op_num_threads = 0  # 모든 CPU 코어 사용
+        sess_options.inter_op_num_threads = 0  # 모든 CPU 코어 사용
+        sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL  # 병렬 실행
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL  # 모든 최적화 활성화
+        
+        # 사용 가능한 프로바이더 (CPU 최적화 우선)
+        providers = ['CPUExecutionProvider']
+        if 'CUDAExecutionProvider' in ort.get_available_providers():
+            providers.insert(0, 'CUDAExecutionProvider')
+        if 'TensorrtExecutionProvider' in ort.get_available_providers():
+            providers.insert(0, 'TensorrtExecutionProvider')
+            
+        self._session = ort.InferenceSession(str(onnx_path), sess_options=sess_options, providers=providers)
         if tokenizer_path:
             self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         else:
@@ -82,8 +97,10 @@ class OnnxEmbeddingBackend():
                 batch,
                 padding=True,
                 truncation=True,
-                max_length=getattr(self._tokenizer, "model_max_length", 8192),
+                max_length=getattr(self._tokenizer, "model_max_length", 512),
                 return_tensors="np",
+                add_special_tokens=True,
+                return_token_type_ids=False,  # token_type_ids 제외
             )
             ort_inputs: Dict[str, Any] = {k: v for k, v in inputs.items() if k in {"input_ids", "attention_mask", "token_type_ids"}}
             if "token_type_ids" in ort_inputs and ort_inputs["token_type_ids"] is None:

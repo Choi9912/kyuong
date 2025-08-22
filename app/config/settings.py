@@ -10,13 +10,13 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Embedding - ONNX 모델 기반
-    embedding_model: str = "bge-m3-ko-onnx-sent"  # ONNX 변환된 모델명
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"  # ONNX 변환된 모델명
     require_embedding_model: bool = True
     # ONNX runtime
     use_onnx: bool = True
-    onnx_model_path: Optional[str] = "models/bge-m3-ko-onnx-sent/model.onnx"  # ONNX 모델 파일 경로
-    onnx_tokenizer_id: Optional[str] = "dragonkue/bge-m3-ko"  # 토크나이저용 HuggingFace 모델 ID (폴백)
-    onnx_tokenizer_path: Optional[str] = "models/bge-m3-ko-onnx-sent"  # 로컬 토크나이저 경로 (우선)
+    onnx_model_path: Optional[str] = "models/all-MiniLM-L6-v2-onnx/model.onnx"  # ONNX 모델 파일 경로
+    onnx_tokenizer_id: Optional[str] = "sentence-transformers/all-MiniLM-L6-v2"  # 토크나이저용 HuggingFace 모델 ID (폴백)
+    onnx_tokenizer_path: Optional[str] = "models/all-MiniLM-L6-v2-onnx"  # 로컬 토크나이저 경로 (우선)
     onnx_pooling: str = "cls"  # cls | mean
     # 출력 차원 및 차원 맞춤
     embedding_output_dim: int = 768
