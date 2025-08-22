@@ -21,11 +21,7 @@ class Settings(BaseSettings):
     # 출력 차원 및 차원 맞춤
     embedding_output_dim: int = 768
     embedding_reduce: str = "truncate"  # truncate | none
-    chunk_size: int = 800
-    chunk_overlap: int = 100
-    prefer_sentence_boundary: bool = True
-    sentence_overlap: int = 1
-    use_kss: bool = True
+
 
     # Integrations
     admin_log_url: Optional[str] = None  # 베이스 URL (선택)
@@ -40,12 +36,6 @@ class Settings(BaseSettings):
     output_use_batch_subdir: bool = True
     output_chunks_format: str = "json"  # one of: json, jsonl
     output_embeddings_format: str = "json"  # one of: json, npy
-
-    # Dynamic schema mapping
-    embedding_text_field: str = "content"  # RDBMS에서 임베딩할 필드명
-    metadata_exclude_fields: Optional[List[str]] = None  # metadata에서 제외할 필드들 (id, 임베딩 필드 자동 제외)
-    include_chunk_content: bool = False  # 청크 내용을 metadata에 포함할지 여부
-    chunk_content_max_length: int = 200  # 청크 내용 포함 시 최대 길이
 
 settings = Settings()
 

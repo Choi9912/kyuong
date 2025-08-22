@@ -2,7 +2,6 @@
 
 # 청킹 관련
 from app.schemas.chunking import (
-    DocumentSchema,
     AdvancedChunkingRequest,
     AdvancedChunkingResponse
 )
@@ -17,7 +16,6 @@ from app.schemas.embedding import (
 )
 
 # 하위 호환성을 위한 별칭 (기존 코드가 깨지지 않도록)
-FlexibleDocumentSchema = DocumentSchema  # 기존 이름 유지
 
 __all__ = [
     # 청킹

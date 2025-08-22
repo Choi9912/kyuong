@@ -23,6 +23,10 @@ def chunk_from_file(
     mode: str = Query("sentence", description="청킹 모드: sentence, library, window"),
     save_to_storage: bool = Query(True, description="청크를 로컬 JSON으로 저장할지 여부"),
     output_name: Optional[str] = Query(None, description="출력 파일 식별자"),
+    # 동적 필드 선택
+    id_field: str = Query("doc_id", description="문서 ID 필드명 (PK 역할)"),
+    text_field: str = Query("text", description="청킹할 텍스트 필드명"),
+    # 청킹 옵션
     max_sentences: int = Query(3, description="청크당 최대 문장 수 (sentence 모드)"),
     overlap_sentences: int = Query(1, description="청크 간 겹칠 문장 수 (sentence 모드)"),
     max_tokens: int = Query(500, description="청크 최대 길이(토큰) (library 모드)"),
@@ -43,10 +47,15 @@ def chunk_from_file(
     try:
         # JSON 파일 읽기
         with open(file_path, 'r', encoding='utf-8') as f:
-            news_data = json.load(f)
+            data = json.load(f)
         
-        if not isinstance(news_data, list):
-            raise HTTPException(status_code=400, detail="JSON 파일은 배열 형태여야 합니다")
+        # {"datas": [...]} 형태인지 확인하고 처리
+        if isinstance(data, dict) and "datas" in data:
+            news_data = data["datas"]
+        elif isinstance(data, list):
+            news_data = data
+        else:
+            raise HTTPException(status_code=400, detail="JSON 파일은 배열 형태이거나 {\"datas\": [...]} 형태여야 합니다")
             
         logger.info(f"파일에서 {len(news_data)}개의 뉴스 기사를 읽었습니다: {file_path}")
         
@@ -64,55 +73,50 @@ def chunk_from_file(
             logger.warning(f"문서 {row_idx}가 딕셔너리가 아닙니다. 건너뜁니다.")
             continue
             
-        # 필드 추출 (news_test_0_0.json 형태에 맞게)
-        doc_id = doc.get("doc_id") or doc.get("news_id") or str(row_idx)
-        title = doc.get("title", "")
-        text = doc.get("text", "")
+        # 동적 필드 추출
+        doc_id = doc.get(id_field) or str(row_idx)
+        text_content = doc.get(text_field, "")
         
-        # metadata에서 link 추출
-        link = None
-        if "metadata" in doc and isinstance(doc["metadata"], dict):
-            link = doc["metadata"].get("link")
-        elif "link" in doc:
-            link = doc["link"]
-        
-        if not text:
-            logger.warning(f"문서 {doc_id}에 텍스트가 없습니다. 건너뜁니다.")
+        if not text_content:
+            logger.warning(f"문서 {doc_id}에 '{text_field}' 필드가 없거나 비어있습니다. 건너뜁니다.")
             continue
+        
+        # 모든 필드를 메타데이터로 보존 (원본 문서의 모든 정보 유지)
+        metadata = dict(doc)  # 원본 문서의 모든 필드를 복사
 
         # 모드별 청킹
         try:
             if mode == "sentence":
                 chunks = chunker.build_sentence_chunks(
                     doc_id=doc_id,
-                    title=title,
-                    text=text,
+                    text=text_content,
+                    text_field=text_field,
                     max_sentences=max_sentences,
                     overlap_sentences=overlap_sentences,
                     row_index=row_idx,
-                    link=link,
+                    metadata=metadata,
                     normalize_whitespace=normalize_whitespace,
                 )
             elif mode == "library":
                 chunks = chunker.build_library_chunks(
                     doc_id=doc_id,
-                    title=title,
-                    text=text,
+                    text=text_content,
+                    text_field=text_field,
                     max_tokens=max_tokens,
                     overlap_tokens=overlap_tokens,
                     row_index=row_idx,
-                    link=link,
+                    metadata=metadata,
                     normalize_whitespace=normalize_whitespace,
                 )
             elif mode == "window":
                 chunks = chunker.build_window_chunks(
                     doc_id=doc_id,
-                    title=title,
-                    text=text,
+                    text=text_content,
+                    text_field=text_field,
                     max_chars=max_chars,
                     overlap_chars=overlap_chars,
                     row_index=row_idx,
-                    link=link,
+                    metadata=metadata,
                 )
             else:
                 raise HTTPException(status_code=400, detail=f"지원하지 않는 모드: {mode}")
