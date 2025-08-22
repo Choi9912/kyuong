@@ -29,6 +29,7 @@ def embedding(
     chunks_file: str = Query(..., description="청크 파일명 (예: legal_batch_001)"),
     embeddings_format: str = Query(None, description="임베딩 저장 포맷: json|npy (기본 설정 따름)"),
     output_name: Optional[str] = Query(None, description="출력 파일 식별자 (기본값: chunks_file과 동일)"),
+    content_field: str = Query("chunk_content", description="임베딩할 텍스트 필드명 (기본값: chunk_content)"),
 ) -> BatchEmbeddingResponse:
     # 청크 파일 읽기
     storage_client = StorageClient(base_dir=settings.output_dir)
@@ -46,14 +47,12 @@ def embedding(
         with chunks_json_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
             for chunk_data in data["chunks"]:
-                # chunk_content 필드에서 임베딩할 텍스트 내용 가져오기
-                if "chunk_content" in chunk_data:
-                    content = chunk_data["chunk_content"]
-                elif "content" in chunk_data:
-                    content = chunk_data["content"]
+                # 지정된 필드에서 임베딩할 텍스트 내용 가져오기
+                if content_field in chunk_data:
+                    content = chunk_data[content_field]
                 else:
-                    # content가 없으면 에러
-                    raise HTTPException(status_code=400, detail="청크 파일에 chunk_content 또는 content 필드가 없습니다.")
+                    # 지정된 필드가 없으면 에러
+                    raise HTTPException(status_code=400, detail=f"청크 파일에 '{content_field}' 필드가 없습니다.")
                 
                 all_chunks.append(
                     EmbeddingChunkSchema(
@@ -70,12 +69,10 @@ def embedding(
         with chunks_jsonl_path.open("r", encoding="utf-8") as f:
             for line in f:
                 chunk_data = json.loads(line.strip())
-                if "chunk_content" in chunk_data:
-                    content = chunk_data["chunk_content"]
-                elif "content" in chunk_data:
-                    content = chunk_data["content"]
+                if content_field in chunk_data:
+                    content = chunk_data[content_field]
                 else:
-                    raise HTTPException(status_code=400, detail="청크 파일에 chunk_content 또는 content 필드가 없습니다.")
+                    raise HTTPException(status_code=400, detail=f"청크 파일에 '{content_field}' 필드가 없습니다.")
                 
                 all_chunks.append(
                     EmbeddingChunkSchema(

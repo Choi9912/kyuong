@@ -66,20 +66,20 @@ class AdvancedChunker:
             if normalize_whitespace:
                 chunk_text = self._collapse_whitespace(chunk_text)
 
-            meta: Dict[str, Any] = {
-                "news_id": doc_id,
-                "title": title,
-                "chunk_content": chunk_text,
-            }
-            if link is not None:
-                meta["link"] = link
-
             rec = {
                 "news_id": doc_id,
                 "chunk_content": chunk_text,
                 "chunk_id": f"{doc_id}-{i}",
-                "metadata": meta,
+                "metadata": {
+                    "news_id": doc_id,
+                    "title": title,
+                    "chunk_content": chunk_text,
+                    "link": link,
+                },
                 "row_index": row_index,
+                "chunk_index": i,
+                "chunk_count": len(range(0, len(sents), step)),  # 총 청크 수 계산
+                "chunk_method": "sentence",
             }
             out.append(rec)
 
@@ -115,28 +115,25 @@ class AdvancedChunker:
         pieces = splitter.split_text(text or "")
 
         out: List[Dict[str, Any]] = []
+        total = len(pieces)
         for i, chunk_text in enumerate(pieces, start=1):
             if normalize_whitespace:
                 chunk_text = self._collapse_whitespace(chunk_text)
             
-            # chunk_id 생성
-            cid = f"{doc_id}-{i}"
-
-            # metadata 구성
-            meta: Dict[str, Any] = {
-                "news_id": doc_id,
-                "title": title,
-                "chunk_content": chunk_text,
-            }
-            if link is not None:
-                meta["link"] = link
-
             rec = {
                 "news_id": doc_id,
                 "chunk_content": chunk_text,
-                "chunk_id": cid,
-                "metadata": meta,
+                "chunk_id": f"{doc_id}-{i}",
+                "metadata": {
+                    "news_id": doc_id,
+                    "title": title,
+                    "chunk_content": chunk_text,
+                    "link": link,
+                },
                 "row_index": row_index,
+                "chunk_index": i,
+                "chunk_count": total,
+                "chunk_method": "library",
             }
             out.append(rec)
 
