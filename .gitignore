@@ -189,7 +189,7 @@ cython_debug/
 # .vscode/
 
 # Embedding Service
-models/bge-m3-ko-onnx-sent/
+models/
 outputs/
 
 # Ruff stuff:
