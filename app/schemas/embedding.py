@@ -40,17 +40,3 @@ class QueryEmbeddingResponse(BaseModel):
     model: str
 
 
-class UrlEmbeddingRequest(BaseModel):
-    """URL에서 JSON 읽어서 임베딩 요청"""
-    url: str = Field(..., description="JSON 데이터가 있는 URL")
-    embedding_field: str = Field(..., description="임베딩할 텍스트 필드명 (예: content, text)")
-    output_name: Optional[str] = Field(default=None, description="출력 파일 식별자")
-
-
-class UrlEmbeddingResponse(BaseModel):
-    """URL 임베딩 응답"""
-    url: str
-    processed_count: int
-    embedding_field: str
-    embeddings_file: str
-    dimension: int

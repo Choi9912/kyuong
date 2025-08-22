@@ -5,7 +5,9 @@ from app.schemas.chunking import (
     DocumentSchema,
     ChunkingRequest, 
     ChunkSchema,
-    ChunkingResponse
+    ChunkingResponse,
+    AdvancedChunkingRequest,
+    AdvancedChunkingResponse
 )
 
 # 임베딩 관련  
@@ -14,9 +16,7 @@ from app.schemas.embedding import (
     BatchEmbeddingRequest,
     QueryEmbeddingRequest,
     BatchEmbeddingResponse, 
-    QueryEmbeddingResponse,
-    UrlEmbeddingRequest,
-    UrlEmbeddingResponse
+    QueryEmbeddingResponse
 )
 
 # 하위 호환성을 위한 별칭 (기존 코드가 깨지지 않도록)
@@ -36,8 +36,6 @@ __all__ = [
     "QueryEmbeddingRequest", 
     "BatchEmbeddingResponse",
     "QueryEmbeddingResponse",
-    "UrlEmbeddingRequest",
-    "UrlEmbeddingResponse",
     
     # 하위 호환성
     "FlexibleDocumentSchema",
