@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     admin_log_url: Optional[str] = None  # 베이스 URL (선택)
 
     # Storage
-    output_dir: str = "outputs"
+    output_dir: str = "chunk"
 
     # Chunk metadata allowlist (for saved chunks_*.json); None means keep all
     chunk_metadata_allowlist: Optional[List[str]] = None

@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 @router.post("/", response_model=AdvancedChunkingResponse)
 def chunk_from_file(
     background_tasks: BackgroundTasks,
-    file_path: str = Query(..., description="원본 JSON 파일 경로"),
+    folder_path: str = Query(..., description="원본 JSON 파일들이 있는 폴더 경로"),
     mode: str = Query("sentence", description="청킹 모드: sentence, library, window"),
     save_to_storage: bool = Query(True, description="청크를 로컬 JSON으로 저장할지 여부"),
     output_name: Optional[str] = Query(None, description="출력 파일 식별자"),
@@ -40,24 +40,45 @@ def chunk_from_file(
     
     크롤링에서 생성된 JSON 파일을 직접 읽어서 청킹합니다.
     """
-    # 파일 존재 확인
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {file_path}")
+    # 폴더 존재 확인
+    if not os.path.exists(folder_path):
+        raise HTTPException(status_code=404, detail=f"폴더를 찾을 수 없습니다: {folder_path}")
+    
+    if not os.path.isdir(folder_path):
+        raise HTTPException(status_code=400, detail=f"경로가 폴더가 아닙니다: {folder_path}")
+    
+    # 폴더 내 모든 JSON 파일 찾기
+    import glob
+    json_files = glob.glob(os.path.join(folder_path, "*.json"))
+    
+    if not json_files:
+        raise HTTPException(status_code=404, detail=f"폴더에 JSON 파일이 없습니다: {folder_path}")
+    
+    logger.info(f"폴더에서 {len(json_files)}개의 JSON 파일을 발견했습니다: {folder_path}")
+    
+    # 모든 JSON 파일에서 데이터 수집
+    all_news_data = []
     
     try:
-        # JSON 파일 읽기
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # {"datas": [...]} 형태인지 확인하고 처리
-        if isinstance(data, dict) and "datas" in data:
-            news_data = data["datas"]
-        elif isinstance(data, list):
-            news_data = data
-        else:
-            raise HTTPException(status_code=400, detail="JSON 파일은 배열 형태이거나 {\"datas\": [...]} 형태여야 합니다")
+        for json_file in json_files:
+            logger.info(f"파일 처리 중: {json_file}")
+            with open(json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             
-        logger.info(f"파일에서 {len(news_data)}개의 뉴스 기사를 읽었습니다: {file_path}")
+            # {"datas": [...]} 형태인지 확인하고 처리
+            if isinstance(data, dict) and "datas" in data:
+                file_data = data["datas"]
+            elif isinstance(data, list):
+                file_data = data
+            else:
+                logger.warning(f"파일 {json_file}의 형태가 올바르지 않습니다. 건너뜁니다.")
+                continue
+            
+            all_news_data.extend(file_data)
+            logger.info(f"파일 {json_file}에서 {len(file_data)}개 문서 추가")
+        
+        news_data = all_news_data
+        logger.info(f"총 {len(news_data)}개의 문서를 수집했습니다")
         
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"JSON 파싱 오류: {str(e)}")
@@ -131,7 +152,7 @@ def chunk_from_file(
     # 저장 옵션
     if save_to_storage:
         storage_client = StorageClient(base_dir=settings.output_dir)
-        file_id = output_name or f"chunks_{os.path.splitext(os.path.basename(file_path))[0]}"
+        file_id = output_name or f"chunks_{os.path.basename(folder_path)}"
         
         background_tasks.add_task(
             storage_client.save_chunks_json,
@@ -146,8 +167,9 @@ def chunk_from_file(
         event_name="file_chunking_completed",
         payload={
             "mode": mode,
-            "file_path": file_path,
-            "output_name": output_name or f"chunks_{os.path.splitext(os.path.basename(file_path))[0]}",
+            "folder_path": folder_path,
+            "json_files_count": len(json_files),
+            "output_name": output_name or f"chunks_{os.path.basename(folder_path)}",
             "doc_count": len(news_data),
             "chunk_count": len(all_chunks),
         },
