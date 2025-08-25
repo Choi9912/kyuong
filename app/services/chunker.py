@@ -16,6 +16,79 @@ class AdvancedChunker:
     def __init__(self):
         self._sent_split_re = re.compile(r'(?<=[.!?。！？…])\s+')
     
+    def process_document(
+        self,
+        mode: str,
+        doc_id: str,
+        text: str,
+        text_field: str,
+        row_index: int,
+        metadata: Optional[Dict[str, Any]] = None,
+        normalize_whitespace: bool = True,
+        # 모드별 파라미터들
+        max_sentences: int = 3,
+        overlap_sentences: int = 1,
+        max_tokens: int = 500,
+        overlap_tokens: int = 50,
+        max_chars: int = 1200,
+        overlap_chars: int = 200,
+    ) -> List[Dict[str, Any]]:
+        """
+        문서를 지정된 모드로 청킹 처리
+        
+        Args:
+            mode: 청킹 모드 (sentence, library, window)
+            doc_id: 문서 ID
+            text: 청킹할 텍스트
+            text_field: 텍스트 필드명
+            row_index: 문서 인덱스
+            metadata: 메타데이터
+            normalize_whitespace: 공백 정규화 여부
+            기타 모드별 파라미터들...
+            
+        Returns:
+            청크 리스트
+            
+        Raises:
+            ValueError: 지원하지 않는 모드인 경우
+            ImportError: 필요한 라이브러리가 없는 경우
+        """
+        if mode == "sentence":
+            return self.build_sentence_chunks(
+                doc_id=doc_id,
+                text=text,
+                text_field=text_field,
+                max_sentences=max_sentences,
+                overlap_sentences=overlap_sentences,
+                row_index=row_index,
+                metadata=metadata,
+                normalize_whitespace=normalize_whitespace,
+            )
+        elif mode == "library":
+            return self.build_library_chunks(
+                doc_id=doc_id,
+                text=text,
+                text_field=text_field,
+                max_tokens=max_tokens,
+                overlap_tokens=overlap_tokens,
+                row_index=row_index,
+                metadata=metadata,
+                normalize_whitespace=normalize_whitespace,
+            )
+        elif mode == "window":
+            return self.build_window_chunks(
+                doc_id=doc_id,
+                text=text,
+                text_field=text_field,
+                max_chars=max_chars,
+                overlap_chars=overlap_chars,
+                row_index=row_index,
+                metadata=metadata,
+                normalize_whitespace=normalize_whitespace,
+            )
+        else:
+            raise ValueError(f"지원하지 않는 모드: {mode}")
+    
     def _split_sentences(self, text: str) -> List[str]:
         """문장 분리"""
         if not text:
@@ -150,6 +223,7 @@ class AdvancedChunker:
         overlap_chars: int = 200,
         row_index: int = 0,
         metadata: Optional[Dict[str, Any]] = None,
+        normalize_whitespace: bool = True,
     ) -> List[Dict[str, Any]]:
         """정확한 문자 길이 기반 윈도우 청킹"""
         s = text or ""
@@ -164,6 +238,9 @@ class AdvancedChunker:
         out = []
         total = len(pieces)
         for i, chunk_text in enumerate(pieces, start=1):
+            if normalize_whitespace:
+                chunk_text = self._collapse_whitespace(chunk_text)
+                
             # 원본 문서의 모든 필드를 메타데이터로 보존 + 청킹 필드를 청크된 텍스트로 대체
             chunk_metadata = dict(metadata) if metadata else {}
             # 선택한 텍스트 필드가 있다면 청크된 텍스트로 대체 (임베딩용)

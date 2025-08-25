@@ -8,11 +8,93 @@ from app.clients.storage_client import StorageClient
 from app.config.settings import settings
 from app.schemas import AdvancedChunkingResponse
 from app.services.chunker import AdvancedChunker
+
 from app.utils.logger import get_logger, log_admin_event
+from app.utils.chunking_utils import create_chunk_admin_log_payload, get_chunk_admin_event_name
 
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+def process_single_file(
+    file_data: list,
+    json_file: str,
+    mode: str,
+    id_field: str,
+    text_field: str,
+    max_sentences: int,
+    overlap_sentences: int,
+    max_tokens: int,
+    overlap_tokens: int,
+    max_chars: int,
+    overlap_chars: int,
+    normalize_whitespace: bool,
+    save_to_storage: bool,
+    output_name: str = None
+) -> list:
+    """단일 파일에 대한 청킹 처리"""
+    
+    chunker = AdvancedChunker()
+    file_chunks = []
+    
+    # 파일명에서 확장자 제거
+    base_filename = os.path.splitext(os.path.basename(json_file))[0]
+    
+    for row_idx, doc in enumerate(file_data):
+        if not isinstance(doc, dict):
+            logger.warning(f"문서 {row_idx}가 딕셔너리가 아닙니다. 건너뜁니다.")
+            continue
+            
+        # 동적 필드 추출
+        doc_id = doc.get(id_field) or str(row_idx)
+        text_content = doc.get(text_field)
+        
+        if not text_content:
+            logger.warning(f"문서 {doc_id}에 텍스트 필드 '{text_field}'가 없습니다. 건너뜁니다.")
+            continue
+        
+        # 메타데이터는 전체 문서 정보 유지
+        metadata = dict(doc)
+        
+        try:
+            # 청킹 모드별 처리를 chunker 서비스에 위임
+            chunks = chunker.process_document(
+                mode=mode,
+                doc_id=doc_id,
+                text=text_content,
+                text_field=text_field,
+                row_index=row_idx,
+                metadata=metadata,
+                normalize_whitespace=normalize_whitespace,
+                # 모드별 파라미터들
+                max_sentences=max_sentences,
+                overlap_sentences=overlap_sentences,
+                max_tokens=max_tokens,
+                overlap_tokens=overlap_tokens,
+                max_chars=max_chars,
+                overlap_chars=overlap_chars,
+            )
+                
+        except ImportError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        file_chunks.extend(chunks)
+    
+    # 파일별로 저장
+    if save_to_storage and file_chunks:
+        storage_client = StorageClient(base_dir=settings.output_dir)
+        chunk_file_id = f"{base_filename}_chunks"
+        
+        storage_client.save_chunks_json(
+            output_name=chunk_file_id,
+            chunks=file_chunks,
+            use_subdir=False
+        )
+        logger.info(f"파일 {json_file}의 청크를 {chunk_file_id}.json으로 저장했습니다")
+    
+    return file_chunks
 
 
 
@@ -56,8 +138,9 @@ def chunk_from_file(
     
     logger.info(f"폴더에서 {len(json_files)}개의 JSON 파일을 발견했습니다: {folder_path}")
     
-    # 모든 JSON 파일에서 데이터 수집
-    all_news_data = []
+    # 파일별로 개별 처리
+    all_chunk_files = []
+    total_chunks = 0
     
     try:
         for json_file in json_files:
@@ -74,112 +157,75 @@ def chunk_from_file(
                 logger.warning(f"파일 {json_file}의 형태가 올바르지 않습니다. 건너뜁니다.")
                 continue
             
-            all_news_data.extend(file_data)
-            logger.info(f"파일 {json_file}에서 {len(file_data)}개 문서 추가")
+            logger.info(f"파일 {json_file}에서 {len(file_data)}개 문서 처리 시작")
+            
+            # 파일별로 청킹 처리
+            file_chunks = process_single_file(
+                file_data=file_data,
+                json_file=json_file,
+                mode=mode,
+                id_field=id_field,
+                text_field=text_field,
+                max_sentences=max_sentences,
+                overlap_sentences=overlap_sentences,
+                max_tokens=max_tokens,
+                overlap_tokens=overlap_tokens,
+                max_chars=max_chars,
+                overlap_chars=overlap_chars,
+                normalize_whitespace=normalize_whitespace,
+                save_to_storage=save_to_storage,
+                output_name=output_name
+            )
+            
+            base_filename = os.path.splitext(os.path.basename(json_file))[0]
+            all_chunk_files.append({
+                "original_file": json_file,
+                "chunk_count": len(file_chunks),
+                "chunk_file": f"{base_filename}_chunks.json"
+            })
+            total_chunks += len(file_chunks)
         
-        news_data = all_news_data
-        logger.info(f"총 {len(news_data)}개의 문서를 수집했습니다")
+        logger.info(f"총 {len(all_chunk_files)}개 파일에서 {total_chunks}개의 청크를 생성했습니다")
         
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"JSON 파싱 오류: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파일 읽기 오류: {str(e)}")
 
-    # 청킹 수행
-    chunker = AdvancedChunker()
-    all_chunks = []
-
-    for row_idx, doc in enumerate(news_data):
-        if not isinstance(doc, dict):
-            logger.warning(f"문서 {row_idx}가 딕셔너리가 아닙니다. 건너뜁니다.")
-            continue
-            
-        # 동적 필드 추출
-        doc_id = doc.get(id_field) or str(row_idx)
-        text_content = doc.get(text_field, "")
-        
-        if not text_content:
-            logger.warning(f"문서 {doc_id}에 '{text_field}' 필드가 없거나 비어있습니다. 건너뜁니다.")
-            continue
-        
-        # 모든 필드를 메타데이터로 보존 (원본 문서의 모든 정보 유지)
-        metadata = dict(doc)  # 원본 문서의 모든 필드를 복사
-
-        # 모드별 청킹
+    # 응답용 모든 청크 수집 (첫 번째 파일의 청크만 응답에 포함)
+    sample_chunks = []
+    if all_chunk_files:
         try:
-            if mode == "sentence":
-                chunks = chunker.build_sentence_chunks(
-                    doc_id=doc_id,
-                    text=text_content,
-                    text_field=text_field,
-                    max_sentences=max_sentences,
-                    overlap_sentences=overlap_sentences,
-                    row_index=row_idx,
-                    metadata=metadata,
-                    normalize_whitespace=normalize_whitespace,
-                )
-            elif mode == "library":
-                chunks = chunker.build_library_chunks(
-                    doc_id=doc_id,
-                    text=text_content,
-                    text_field=text_field,
-                    max_tokens=max_tokens,
-                    overlap_tokens=overlap_tokens,
-                    row_index=row_idx,
-                    metadata=metadata,
-                    normalize_whitespace=normalize_whitespace,
-                )
-            elif mode == "window":
-                chunks = chunker.build_window_chunks(
-                    doc_id=doc_id,
-                    text=text_content,
-                    text_field=text_field,
-                    max_chars=max_chars,
-                    overlap_chars=overlap_chars,
-                    row_index=row_idx,
-                    metadata=metadata,
-                    normalize_whitespace=normalize_whitespace,
-
-                )
-            else:
-                raise HTTPException(status_code=400, detail=f"지원하지 않는 모드: {mode}")
-                
-        except ImportError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-        all_chunks.extend(chunks)
-
-    # 저장 옵션
-    if save_to_storage:
-        storage_client = StorageClient(base_dir=settings.output_dir)
-        file_id = output_name or f"chunks_{os.path.basename(folder_path)}"
-        
-        background_tasks.add_task(
-            storage_client.save_chunks_json,
-            file_id,
-            all_chunks,
-            settings.output_use_batch_subdir,
-        )
+            first_file = all_chunk_files[0]
+            base_filename = os.path.splitext(os.path.basename(first_file["original_file"]))[0]
+            chunk_file_path = os.path.join(settings.output_dir, f"{base_filename}_chunks.json")
+            if os.path.exists(chunk_file_path):
+                with open(chunk_file_path, 'r', encoding='utf-8') as f:
+                    chunk_data = json.load(f)
+                    if isinstance(chunk_data, dict) and "chunks" in chunk_data:
+                        sample_chunks = chunk_data["chunks"][:10]  # 처음 10개만 샘플로
+        except Exception as e:
+            logger.warning(f"응답용 청크 파일 읽기 실패: {e}")
 
     # 로그
     background_tasks.add_task(
         log_admin_event,
-        event_name="file_chunking_completed",
-        payload={
-            "mode": mode,
-            "folder_path": folder_path,
-            "json_files_count": len(json_files),
-            "output_name": output_name or f"chunks_{os.path.basename(folder_path)}",
-            "doc_count": len(news_data),
-            "chunk_count": len(all_chunks),
-        },
+        event_name=get_chunk_admin_event_name(),
+        payload=create_chunk_admin_log_payload(
+            mode=mode,
+            folder_path=folder_path,
+            json_files_count=len(json_files),
+            chunk_files=[f['chunk_file'] for f in all_chunk_files],
+            total_chunks=total_chunks,
+        ),
     )
 
     return AdvancedChunkingResponse(
-        chunks=all_chunks,
-        count=len(all_chunks), 
+        chunks=sample_chunks,
+        count=total_chunks, 
         mode=mode,
-        total_documents=len(news_data)
+        total_documents=len(json_files),
+        message=f"파일별 청킹 완료: {len(all_chunk_files)}개 파일 처리됨. 생성된 청크 파일: {[f['chunk_file'] for f in all_chunk_files]}"
     )
 
 

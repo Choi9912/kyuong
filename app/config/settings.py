@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     chunk_metadata_allowlist: Optional[List[str]] = None
 
     # Output layout and formats
-    output_use_batch_subdir: bool = True
+    output_use_batch_subdir: bool = False
     output_chunks_format: str = "json"  # one of: json, jsonl
     output_embeddings_format: str = "json"  # one of: json, npy
 

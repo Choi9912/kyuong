@@ -3,9 +3,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 
-def generate_output_name(base_name: Optional[str] = None, prefix: str = "embed") -> str:
+def generate_embedding_output_name(base_name: Optional[str] = None, prefix: str = "embed") -> str:
     """
-    통일된 출력 파일명 생성
+    임베딩용 출력 파일명 생성
     
     Args:
         base_name: 사용자가 지정한 파일명 (없으면 자동 생성)
@@ -26,15 +26,14 @@ def get_utc_timestamp() -> str:
     return datetime.utcnow().isoformat() + "Z"
 
 
-def create_base_manifest(
+def create_embedding_manifest(
     output_name: str,
     chunks_count: int,
     dimension: int,
     model: str,
-    embeddings_format: str = "npy"
 ) -> Dict[str, Any]:
     """
-    기본 매니페스트 구조 생성
+    임베딩용 매니페스트 구조 생성
     
     Args:
         output_name: 출력 파일명
@@ -44,7 +43,7 @@ def create_base_manifest(
         embeddings_format: 임베딩 저장 형식
     
     Returns:
-        기본 매니페스트 딕셔너리
+        임베딩 매니페스트 딕셔너리
     """
     return {
         "output_name": output_name,
@@ -53,46 +52,43 @@ def create_base_manifest(
         "dim": dimension,
         "model": model,
         "onnx": True,
-        "embeddings_format": embeddings_format,
+        "embeddings_format": "npy",
+        "type": "embedding_manifest"
     }
 
 
-def create_admin_log_payload(
-    event_type: str,
+def create_embedding_admin_log_payload(
+    chunks_folder_path: str,
+    json_files_count: int,
+    total_chunks: int,
     output_name: str,
-    processed_count: int,
     **extra_fields
 ) -> Dict[str, Any]:
     """
-    통일된 어드민 로그 페이로드 생성
+    임베딩용 어드민 로그 페이로드 생성
     
     Args:
-        event_type: 이벤트 타입 (batch, url, query 등)
+        chunks_folder_path: 청크 폴더 경로
+        json_files_count: 처리된 JSON 파일 수
+        total_chunks: 총 청크 수
         output_name: 출력 파일명
-        processed_count: 처리된 항목 수
         **extra_fields: 추가 필드들
     
     Returns:
-        어드민 로그 페이로드
+        임베딩 어드민 로그 페이로드
     """
     payload = {
-        "event_type": event_type,
+        "event_type": "embedding_generation",
+        "chunks_folder_path": chunks_folder_path,
+        "json_files_count": json_files_count,
+        "total_chunks": total_chunks,
         "output_name": output_name,
-        "processed_count": processed_count,
         "timestamp": get_utc_timestamp(),
     }
     payload.update(extra_fields)
     return payload
 
 
-def get_admin_event_name(event_type: str) -> str:
-    """
-    통일된 어드민 이벤트명 생성
-    
-    Args:
-        event_type: 이벤트 타입
-    
-    Returns:
-        표준화된 이벤트명
-    """
-    return f"embedding_{event_type}_completed"
+def get_embedding_admin_event_name() -> str:
+    """임베딩용 어드민 이벤트명 반환"""
+    return "embedding_generation_completed"
