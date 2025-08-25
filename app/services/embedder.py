@@ -132,7 +132,7 @@ class Embedder:
     def __init__(self, model_name: Optional[str] = None, require: bool = False) -> None:
         # 항상 ONNX만 사용한다고 가정
         self.model_name = model_name or settings.embedding_model
-        self.target_dim = int(getattr(settings, "embedding_output_dim", 768))
+        self.target_dim = int(getattr(settings, "embedding_output_dim", 384))
         self.reduce = (getattr(settings, "embedding_reduce", "truncate") or "truncate").lower()
 
         onnx_path = getattr(settings, "onnx_model_path", None)

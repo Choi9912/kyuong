@@ -6,7 +6,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from app.clients.storage_client import StorageClient
 from app.config.settings import settings
 from app.schemas import BatchEmbeddingRequest, BatchEmbeddingResponse, EmbeddingChunkSchema, QueryEmbeddingRequest, QueryEmbeddingResponse
-# TextChunker 제거됨
 from app.services.embedder import Embedder
 from app.utils.logger import get_logger, log_admin_event
 from app.utils.embedding_utils import (
@@ -27,66 +26,78 @@ logger = get_logger(__name__)
 @router.post("/", response_model=BatchEmbeddingResponse)
 def embedding(
     background_tasks: BackgroundTasks,
-    chunks_file: str = Query(..., description="청크 파일명 (예: legal_batch_001)"),
+    chunks_file_path: str = Query(..., description="청크 파일 경로 (JSON 형태)"),
     embeddings_format: str = Query(None, description="임베딩 저장 포맷: json|npy (기본 설정 따름)"),
-    output_name: Optional[str] = Query(None, description="출력 파일 식별자 (기본값: chunks_file과 동일)"),
+    output_name: Optional[str] = Query(None, description="출력 파일 식별자"),
     content_field: str = Query("chunk_content", description="임베딩할 텍스트 필드명 (기본값: chunk_content)"),
     batch_size: int = Query(100, description="배치 크기 (기본값: 100)"),
 ) -> BatchEmbeddingResponse:
+    # 파일 존재 확인
+    import os
+    import json
+    if not os.path.exists(chunks_file_path):
+        raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {chunks_file_path}")
+    
     # 청크 파일 읽기
     storage_client = StorageClient(base_dir=settings.output_dir)
-    file_id = generate_output_name(output_name or chunks_file, prefix="batch")
-    
-    # JSON 또는 JSONL 파일 찾기
-    chunks_json_path = storage_client._output_dir(chunks_file, settings.output_use_batch_subdir) / f"chunks_{chunks_file}.json"
-    chunks_jsonl_path = storage_client._output_dir(chunks_file, settings.output_use_batch_subdir) / f"chunks_{chunks_file}.jsonl"
+    file_id = generate_output_name(output_name or os.path.splitext(os.path.basename(chunks_file_path))[0], prefix="batch")
     
     all_chunks: List[EmbeddingChunkSchema] = []
     
-    if chunks_json_path.exists():
-        # JSON 파일 읽기
-        import json
-        with chunks_json_path.open("r", encoding="utf-8") as f:
+    try:
+        with open(chunks_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            for chunk_data in data["chunks"]:
-                # 지정된 필드에서 임베딩할 텍스트 내용 가져오기
+        
+        # {"chunks": [...]} 형태인지 확인하고 처리
+        if isinstance(data, dict) and "chunks" in data:
+            chunks_data = data["chunks"]
+        elif isinstance(data, list):
+            chunks_data = data
+        else:
+            raise HTTPException(status_code=400, detail="청크 파일은 배열 형태이거나 {\"chunks\": [...]} 형태여야 합니다")
+        
+        for chunk_data in chunks_data:
+            # 지정된 필드에서 임베딩할 텍스트 내용 가져오기
+            content = None
+            
+            # content_field가 metadata 안에 있는지 확인
+            if "." in content_field:
+                # metadata.field_name 형태 처리
+                keys = content_field.split(".")
+                current = chunk_data
+                for key in keys:
+                    if isinstance(current, dict) and key in current:
+                        current = current[key]
+                    else:
+                        current = None
+                        break
+                content = current if current is not None else None
+            else:
+                # 단순 필드명 또는 metadata 내부 확인
                 if content_field in chunk_data:
                     content = chunk_data[content_field]
-                else:
-                    # 지정된 필드가 없으면 에러
-                    raise HTTPException(status_code=400, detail=f"청크 파일에 '{content_field}' 필드가 없습니다.")
-                
-                all_chunks.append(
-                    EmbeddingChunkSchema(
-                        chunk_id=chunk_data.get("chunk_id") or str(chunk_data.get("id", "unknown")),
-                        id=str(chunk_data.get("id", "unknown")),
-                        content=content,
-                        metadata=chunk_data.get("metadata", {}),
-                        row_index=chunk_data.get("row_index"),
-                    )
+                elif "metadata" in chunk_data and isinstance(chunk_data["metadata"], dict) and content_field in chunk_data["metadata"]:
+                    content = chunk_data["metadata"][content_field]
+            
+            if content is None:
+                raise HTTPException(status_code=400, detail=f"청크 파일에 '{content_field}' 필드가 없습니다.")
+            
+            all_chunks.append(
+                EmbeddingChunkSchema(
+                    chunk_id=chunk_data.get("chunk_id") or str(chunk_data.get("id", "unknown")),
+                    id=str(chunk_data.get("id", "unknown")),
+                    content=content,
+                    metadata=chunk_data.get("metadata", {}),
+                    row_index=chunk_data.get("row_index"),
                 )
-    elif chunks_jsonl_path.exists():
-        # JSONL 파일 읽기
-        import json
-        with chunks_jsonl_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                chunk_data = json.loads(line.strip())
-                if content_field in chunk_data:
-                    content = chunk_data[content_field]
-                else:
-                    raise HTTPException(status_code=400, detail=f"청크 파일에 '{content_field}' 필드가 없습니다.")
-                
-                all_chunks.append(
-                    EmbeddingChunkSchema(
-                        chunk_id=chunk_data.get("chunk_id") or str(chunk_data.get("id", "unknown")),
-                        id=str(chunk_data.get("id", "unknown")),
-                        content=content,
-                        metadata=chunk_data.get("metadata", {}),
-                        row_index=chunk_data.get("row_index"),
-                    )
-                )
-    else:
-        raise HTTPException(status_code=404, detail=f"청크 파일을 찾을 수 없습니다: {chunks_file}")
+            )
+            
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"JSON 파싱 오류: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"파일 읽기 오류: {str(e)}")
+    
+    logger.info(f"파일에서 {len(all_chunks)}개의 청크를 읽었습니다: {chunks_file_path}")
 
     embedder = Embedder(model_name=settings.embedding_model, require=settings.require_embedding_model)
 
@@ -146,7 +157,7 @@ def embedding(
         )
         manifest_data.update({
             "source_type": "batch_file",
-            "chunks_file": chunks_file,
+            "chunks_file": chunks_file_path,
         })
         background_tasks.add_task(
             storage_client.save_manifest,
@@ -176,7 +187,7 @@ def embedding(
         )
         manifest_data.update({
             "source_type": "batch_file",
-            "chunks_file": chunks_file,
+            "chunks_file": chunks_file_path,
         })
         background_tasks.add_task(
             storage_client.save_manifest,
@@ -190,7 +201,7 @@ def embedding(
         event_type="batch",
         output_name=file_id,
         processed_count=len(all_chunks),
-        chunks_file=chunks_file,
+        chunks_file=chunks_file_path,
         dimension=int(len(vectors[0])) if vectors else 0
     )
     background_tasks.add_task(

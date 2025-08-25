@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     onnx_tokenizer_path: Optional[str] = "models/all-MiniLM-L6-v2-onnx"  # 로컬 토크나이저 경로 (우선)
     onnx_pooling: str = "cls"  # cls | mean
     # 출력 차원 및 차원 맞춤
-    embedding_output_dim: int = 768
+    embedding_output_dim: int = 384
     embedding_reduce: str = "truncate"  # truncate | none
 
 

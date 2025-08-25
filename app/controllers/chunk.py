@@ -117,6 +117,8 @@ def chunk_from_file(
                     overlap_chars=overlap_chars,
                     row_index=row_idx,
                     metadata=metadata,
+                    normalize_whitespace=normalize_whitespace,
+
                 )
             else:
                 raise HTTPException(status_code=400, detail=f"지원하지 않는 모드: {mode}")
